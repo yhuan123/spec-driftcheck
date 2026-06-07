@@ -9,8 +9,11 @@ description: 为一个插件从零搭建业务价值 spec 体系（spec 文档 +
 
 ## 第 0 步：加载 playbook
 
-优先读本仓库副本 `docs/playbook.md`（skill 随 spec-driftcheck 仓库分发时）；否则拉取：
-`https://raw.githubusercontent.com/yhuan123/spec-driftcheck/main/docs/playbook.md`
+按以下顺序定位（取第一个存在的）：
+
+1. `${CLAUDE_PLUGIN_ROOT}/docs/playbook.md`（作为 acceptance-spec 插件安装时，playbook 随插件分发）；
+2. 本仓库副本 `docs/playbook.md`（直接在 spec-driftcheck 仓库内工作时）；
+3. 拉取 `https://raw.githubusercontent.com/yhuan123/spec-driftcheck/main/docs/playbook.md`。
 
 ## 第 1 步：收集 3 个输入（一次问清）
 

@@ -1,0 +1,14 @@
+{
+  "name": "spec-driftcheck",
+  "owner": {
+    "name": "yhuan123",
+    "url": "https://github.com/yhuan123"
+  },
+  "plugins": [
+    {
+      "name": "acceptance-spec",
+      "source": "./",
+      "description": "业务价值验收 spec 体系：spec-bootstrap 起草编排 + driftcheck 漂移提醒 + 发版验收流程"
+    }
+  ]
+}

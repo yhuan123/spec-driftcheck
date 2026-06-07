@@ -1,0 +1,11 @@
+{
+  "name": "acceptance-spec",
+  "version": "0.1.0",
+  "description": "业务价值验收 spec 体系：为平台插件从零搭建独立验收 spec（EARS + GWT），配套漂移提醒机制（driftcheck）与发版验收流程。spec 是验收唯一权威，独立于实现。",
+  "author": {
+    "name": "yhuan123",
+    "url": "https://github.com/yhuan123"
+  },
+  "repository": "https://github.com/yhuan123/spec-driftcheck",
+  "keywords": ["spec", "acceptance", "ears", "gwt", "drift-check", "sdd"]
+}
