@@ -35,7 +35,8 @@
 .github/workflows/spec-drift-autofix.yaml
 │
 ├─ 1. checkout 主仓库（含 spec/）
-├─ 2. driftcheck 二进制来源：job 以工具镜像（ghcr.io/yhuan123/spec-driftcheck）为 container 运行，免下载
+├─ 2. driftcheck 二进制来源：job 跑 ubuntu-latest，docker cp 从工具镜像提取静态二进制
+│      （镜像是 alpine/musl 基底，作 container job 会令 JS actions 的 node 不兼容）
 ├─ 3. driftcheck check --format json > findings.json    ← driftcheck 唯一代码改动
 │      └─ exit 0 → 全绿，workflow 成功结束
 ├─ 4. openai/codex-action (exec)
