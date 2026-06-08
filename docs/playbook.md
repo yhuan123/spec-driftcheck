@@ -72,6 +72,7 @@ driftcheck init --plugin-name <插件名> --spec-repo <owner/主仓库> [--out s
 2. 各组件仓库 PAC namespace 建 secret：`kubectl create secret generic spec-drift-github-token --from-literal=token=<bot-token>`（bot 需各仓库 PR 评论权限）。
 3. 各组件仓库 `.tekton/` 加 PipelineRun 引用 `spec-drift-notice` Task（模板在 `spec/sync/tasks/`，只改 `repo-name` param）。建议先 1 个仓库试点。
 4. 主仓库所在集群 apply `spec/sync/tasks/scheduled-drift-check.yaml`（每日定时全量兜底）。
+5. （可选，GitHub 托管仓库）启用漂移自动修复：复制 `spec/sync/workflows/spec-drift-autofix.yaml` 到主仓库 `.github/workflows/`，repo secrets 配置 `OPENAI_API_KEY`。每日全量 check 发现漂移后由 Codex 起草修复，经护栏（只许改 spec/、禁改 drift-check.yaml）与 check 质量门后，向固定分支 `spec-drift-autofix` 提幂等 PR，**合并权在人**。启用后集群侧 `scheduled-drift-check.yaml` 可不再部署（离线集群仍用它）。
 - **完成判据**：见第 7 步试点。
 
 ## 第 7 步：试点验证
@@ -81,6 +82,7 @@ driftcheck init --plugin-name <插件名> --spec-repo <owner/主仓库> [--out s
 1. 机器人评论出现，列出正确的能力域与关联 REQ；
 2. 再 push 一次，评论**幂等更新**（同一条评论，不重复发）；
 3. 改动不命中锚点的 PR **不**收到评论（负样本）。
+4. （启用 autofix 时）人为制造漂移（如临时从某 anchors.yaml 删一个已登记 CRD 并合入 main）→ 手动 `workflow_dispatch` 触发 → 验证：修复 PR 出现且内容正确；全绿时触发 → 不开 PR；漂移未合并前连跑两次 → 同一 PR 被更新不重复；漂移含"消失的 CRD"→ PR body 出现 ⚠️ 高亮。
 - **完成判据**：三项全过 → 推广其余组件仓库（每仓库只改 `repo-name`）。
 
 ---
@@ -111,3 +113,5 @@ driftcheck notice --repo-name <repo-key> --changed-files /tmp/changed.txt --spec
 - anchors 路径写太宽会误报刷屏，写太窄会漏报——从测试目录/patches/CRD types 起步，按误报率迭代；
 - 评论 bot 的 token 权限：对组件仓库需要 issues/PR 写权限；
 - 定时任务依赖集群已有 ScheduledTrigger CRD（tektoncd-enhancement 提供）；无此 CRD 的集群可改用 CronJob 形态自行改写。
+- autofix workflow 的 cron 是 UTC（`0 18 * * *` = 北京时间 02:00），改时区要换算；
+- autofix 的质量门只覆盖机器可判定层（格式/锚点/CRD 存在性），**语义对错完全靠 PR 人审**——review 时重点看 ⚠️ 高亮的疑似移除项与 `<!-- draft by autofix -->` 草稿 REQ。
