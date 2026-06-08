@@ -96,3 +96,22 @@ func TestRender_RefusesOverwrite(t *testing.T) {
 		t.Fatal("重复渲染应报错拒绝覆盖")
 	}
 }
+
+// TestRender_AutofixPrompt：prompt 模板渲染且含关键纪律。
+func TestRender_AutofixPrompt(t *testing.T) {
+	root := t.TempDir()
+	specDir := filepath.Join(root, "spec")
+	if _, err := Render(specDir, testParams); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(specDir, "sync/autofix-prompt.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(data)
+	for _, want := range []string{"demo-plugin", "drift-check.yaml", "planned", "/tmp/pr-body.md"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("prompt 应含 %q", want)
+		}
+	}
+}
