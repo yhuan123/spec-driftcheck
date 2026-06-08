@@ -42,7 +42,12 @@ func Render(outDir string, p Params) ([]string, error) {
 		if err != nil {
 			return err
 		}
-		tmpl, err := template.New(rel).Parse(string(raw))
+		t := template.New(rel)
+		if strings.HasPrefix(rel, "sync/workflows/") {
+			// GHA workflow 含 ${{ }}，与默认定界符冲突，改用 [[ ]]。
+			t = t.Delims("[[", "]]")
+		}
+		tmpl, err := t.Parse(string(raw))
 		if err != nil {
 			return fmt.Errorf("解析模板 %s: %w", rel, err)
 		}

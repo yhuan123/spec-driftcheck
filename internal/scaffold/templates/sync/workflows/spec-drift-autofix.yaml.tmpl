@@ -1,0 +1,99 @@
+# spec 漂移自动修复：每日全量 check → Codex 起草修复 → 护栏与质量门 → 幂等 PR。
+# 接入：复制本文件到主仓库 .github/workflows/，并在 repo secrets 配置 OPENAI_API_KEY。
+# 设计：generator-verifier 分离——agent 是不可信生成器，driftcheck check 是确定性验证器。
+name: spec-drift-autofix
+on:
+  schedule:
+    - cron: "0 18 * * *" # 02:00 Asia/Shanghai
+  workflow_dispatch: {}
+concurrency:
+  group: spec-drift-autofix
+  cancel-in-progress: true
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  autofix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: extract driftcheck binary
+        # 工具镜像是 alpine 基底，不能作 container job（JS actions 的 node 不兼容 musl），
+        # 故提取静态二进制到 runner。
+        run: |
+          docker create --name dc [[.ToolImage]]
+          sudo docker cp dc:/usr/local/bin/driftcheck /usr/local/bin/driftcheck
+          docker rm dc
+          driftcheck 2>&1 | head -1 || true
+      - name: drift check
+        id: check
+        run: |
+          set +e
+          driftcheck check --spec-dir spec --work-dir /tmp/driftcheck-repos \
+            --local-repo-root . --format json > /tmp/findings.json
+          code=$?
+          set -e
+          # 基础设施错误（克隆失败等）：非零退出且无 findings 输出 → 直接红，与漂移路径区分。
+          if [ "$code" -ne 0 ] && [ ! -s /tmp/findings.json ]; then
+            echo "driftcheck 基础设施错误，详见上方日志" >&2
+            exit "$code"
+          fi
+          echo "drifted=$([ "$code" -ne 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          cat /tmp/findings.json
+      - name: compose prompt
+        if: steps.check.outputs.drifted == 'true'
+        run: |
+          cat spec/sync/autofix-prompt.md > /tmp/prompt.md
+          printf '\n## 本次漂移 findings（JSON）\n\n```json\n' >> /tmp/prompt.md
+          cat /tmp/findings.json >> /tmp/prompt.md
+          printf '\n```\n' >> /tmp/prompt.md
+      - name: codex autofix
+        if: steps.check.outputs.drifted == 'true'
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          prompt-file: /tmp/prompt.md
+          sandbox: workspace-write
+      - name: guardrails
+        if: steps.check.outputs.drifted == 'true'
+        # 确定性护栏，不信任 prompt 约束：改动只许落在 spec/ 内，且禁改豁免配置。
+        run: |
+          changed=$(git diff --name-only)
+          echo "agent 改动文件："; echo "$changed"
+          outside=$(echo "$changed" | grep -v '^spec/' || true)
+          if [ -n "$outside" ]; then
+            echo "护栏违规：改动超出 spec/：" >&2; echo "$outside" >&2; exit 1
+          fi
+          if echo "$changed" | grep -q '^spec/sync/drift-check.yaml$'; then
+            echo "护栏违规：禁止修改 spec/sync/drift-check.yaml（豁免是人的特权）" >&2; exit 1
+          fi
+      - name: verify green
+        if: steps.check.outputs.drifted == 'true'
+        # 确定性质量门：agent 修完必须全绿，否则不开 PR。
+        run: |
+          rm -rf /tmp/driftcheck-repos
+          driftcheck check --spec-dir spec --work-dir /tmp/driftcheck-repos --local-repo-root .
+      - name: ensure PR body
+        if: steps.check.outputs.drifted == 'true'
+        # agent 按任务书把修复说明写到 /tmp/pr-body.md；缺失时退化为原始 findings。
+        run: |
+          if [ ! -s /tmp/pr-body.md ]; then
+            {
+              echo '## spec 漂移自动修复'
+              echo
+              echo '⚠️ agent 未生成修复说明，请对照原始 findings 逐项审查改动：'
+              echo
+              echo '```json'
+              cat /tmp/findings.json
+              echo '```'
+            } > /tmp/pr-body.md
+          fi
+      - name: create or update PR
+        if: steps.check.outputs.drifted == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: spec-drift-autofix
+          title: "spec: 漂移自动修复（autofix）"
+          commit-message: "spec: 漂移自动修复（autofix）"
+          body-path: /tmp/pr-body.md
+          delete-branch: true

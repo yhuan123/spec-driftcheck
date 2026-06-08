@@ -48,7 +48,7 @@ func TestRender_SubstitutesParams(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if strings.Contains(string(data), "{{") {
+		if strings.Contains(string(data), "{{.") || strings.Contains(string(data), "[[.") {
 			t.Errorf("%s 含未渲染的模板占位符", f)
 		}
 	}
@@ -58,6 +58,30 @@ func TestRender_SubstitutesParams(t *testing.T) {
 	}
 	if !strings.Contains(string(task), "https://github.com/acme/demo-plugin.git") {
 		t.Errorf("Task 应包含渲染后的 spec-repo-url: %s", task)
+	}
+}
+
+// TestRender_WorkflowKeepsGHAExpressions：workflow 模板用 [[ ]] 定界符渲染，
+// GHA 的 ${{ }} 原样保留，Go 模板变量被替换。
+func TestRender_WorkflowKeepsGHAExpressions(t *testing.T) {
+	root := t.TempDir()
+	specDir := filepath.Join(root, "spec")
+	if _, err := Render(specDir, testParams); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(specDir, "sync/workflows/spec-drift-autofix.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(data)
+	if !strings.Contains(s, "${{ secrets.OPENAI_API_KEY }}") {
+		t.Error("GHA secrets 表达式应原样保留")
+	}
+	if !strings.Contains(s, testParams.ToolImage) {
+		t.Error("ToolImage 应被渲染")
+	}
+	if strings.Contains(s, "[[") {
+		t.Error("不应残留 [[ ]] 模板占位符")
 	}
 }
 
